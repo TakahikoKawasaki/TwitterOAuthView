@@ -157,7 +157,7 @@ public class TwitterOAuthView extends WebView
      * Internal flag for debug logging. Change the value to 'true'
      * to turn on debug logging.
      */
-    private static final boolean DEBUG = true;
+    private static final boolean DEBUG = false;
 
 
     /**
