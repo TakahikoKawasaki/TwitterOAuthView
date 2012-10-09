@@ -22,9 +22,11 @@ import twitter4j.TwitterFactory;
 import twitter4j.auth.AccessToken;
 import twitter4j.auth.RequestToken;
 import android.content.Context;
+import android.graphics.Bitmap;
 import android.net.Uri;
 import android.net.http.SslError;
 import android.os.AsyncTask;
+import android.os.Build;
 import android.util.AttributeSet;
 import android.util.Log;
 import android.webkit.SslErrorHandler;
@@ -577,6 +579,16 @@ public class TwitterOAuthView extends WebView
                 handler.proceed();
             }
 
+            @Override
+            public void onPageStarted(WebView view, String url, Bitmap favicon) 
+            {
+                super.onPageStarted(view, url, favicon);
+            	
+            	 if (Build.VERSION.SDK_INT < Build.VERSION_CODES.HONEYCOMB) {
+                 	shouldOverrideUrlLoading(view, url);
+                 	return;
+            	 }
+            }            
 
             @Override
             public boolean shouldOverrideUrlLoading(WebView view, String url)
@@ -601,6 +613,8 @@ public class TwitterOAuthView extends WebView
 
                 if (DEBUG)
                     Log.d(TAG, "oauth_verifier = " + verifier);
+                
+                stopLoading();
 
                 // Notify that the the authorization step was done.
                 notifyAuthorization();
