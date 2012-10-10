@@ -579,16 +579,35 @@ public class TwitterOAuthView extends WebView
                 handler.proceed();
             }
 
+
             @Override
-            public void onPageStarted(WebView view, String url, Bitmap favicon) 
+            public void onPageStarted(WebView view, String url, Bitmap favicon)
             {
                 super.onPageStarted(view, url, favicon);
-            	
-            	 if (Build.VERSION.SDK_INT < Build.VERSION_CODES.HONEYCOMB) {
-                 	shouldOverrideUrlLoading(view, url);
-                 	return;
-            	 }
-            }            
+
+                // 11 = Build.VERSION_CODES.HONEYCOMB (Android 3.0)
+                if (Build.VERSION.SDK_INT < 11)
+                {
+                    // According to this page:
+                    //
+                    // http://www.catchingtales.com/android-webview-shouldoverrideurlloading-and-redirect/416/
+                    //
+                    // shouldOverrideUrlLoading() is not called for redirects on
+                    // Android earlier than 3.0, so call the method manually.
+                    //
+                    // The implementation of shouldOverrideUrlLoading() returns
+                    // true only when the URL starts with the callback URL and
+                    // dummyCallbackUrl is true.
+                    boolean stop = shouldOverrideUrlLoading(view, url);
+
+                    if (stop)
+                    {
+                        // Stop loading the current page.
+                        stopLoading();
+                    }
+                }
+            }
+
 
             @Override
             public boolean shouldOverrideUrlLoading(WebView view, String url)
@@ -614,8 +633,6 @@ public class TwitterOAuthView extends WebView
                 if (DEBUG)
                     Log.d(TAG, "oauth_verifier = " + verifier);
                 
-                stopLoading();
-
                 // Notify that the the authorization step was done.
                 notifyAuthorization();
 
