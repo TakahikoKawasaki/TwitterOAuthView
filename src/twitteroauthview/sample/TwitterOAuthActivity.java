@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012 Neo Visionaries Inc.
+ * Copyright (C) 2012-2013 Neo Visionaries Inc.
  * 
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -49,6 +49,7 @@ public class TwitterOAuthActivity extends Activity implements TwitterOAuthView.L
 
         // Create an instance of TwitterOAuthView.
         view = new TwitterOAuthView(this);
+        view.setDebugEnabled(true);
 
         setContentView(view);
 
