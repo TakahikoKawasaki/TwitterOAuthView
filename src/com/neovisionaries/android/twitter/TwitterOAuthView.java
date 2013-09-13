@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012 Neo Visionaries Inc.
+ * Copyright (C) 2012-2013 Neo Visionaries Inc.
  * 
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -40,7 +40,7 @@ import android.webkit.WebViewClient;
  * using <a href="http://twitter4j.org/">twitter4j</a>.
  *
  * <p>
- * As this class is implemented as a subclass of View, it can be
+ * As this class is implemented as a subclass of {@code View}, it can be
  * integrated into the Android layout system seamlessly. This fact
  * makes this class an easily-reusable UI component.
  * </p>
@@ -57,7 +57,8 @@ import android.webkit.WebViewClient;
  * </p>
  *
  * <p>
- * Below is an example Activity implementation using TwitterOAuthView.
+ * Below is an example {@code Activity} implementation using
+ * {@code TwitterOAuthView}.
  * </p>
  *
  * <pre style="border: 1px solid black; margin: 1em; padding: 0.5em;">
@@ -156,7 +157,7 @@ public class TwitterOAuthView extends WebView
 
 
     /**
-     * Internal flag for debug logging. Change the value to 'true'
+     * Internal flag for debug logging. Change the value to {@code true}
      * to turn on debug logging.
      */
     private static final boolean DEBUG = false;
@@ -240,6 +241,19 @@ public class TwitterOAuthView extends WebView
 
 
     /**
+     * Twitter OAuth task that has been invoked by {@link
+     * #start(String, String, String, boolean, Listener) start} method.
+     */
+    private TwitterOAuthTask twitterOAuthTask;
+
+
+    /**
+     * Flag for debug logging.
+     */
+    private boolean isDebugEnabled;
+
+
+    /**
      * A constructor that calls {@link WebView#WebView(Context, AttributeSet, int)
      * super}(context, attrs, defStyle).
      *
@@ -286,6 +300,9 @@ public class TwitterOAuthView extends WebView
     }
 
 
+    /**
+     * Initialization common for all constructors.
+     */
     private void init()
     {
         WebSettings settings = getSettings();
@@ -301,6 +318,9 @@ public class TwitterOAuthView extends WebView
 
         // Scroll bar
         setScrollBarStyle(WebView.SCROLLBARS_INSIDE_OVERLAY);
+
+        // Set the initial value of the flag of debug logging.
+        isDebugEnabled = DEBUG;
     }
 
 
@@ -315,15 +335,15 @@ public class TwitterOAuthView extends WebView
      * <li>Get a request token using the given pair of consumer key
      *     and consumer secret.
      * <li>Load the authorization URL that the obtained request token
-     *     points to into this TwitterOAuthView instance.
+     *     points to into this {@code TwitterOAuthView} instance.
      * <li>Wait for the user to finish the authorization process at
-     *     Twitter's authorization site. This TwitterOAuthView
+     *     Twitter's authorization site. This {@code TwitterOAuthView}
      *     instance is redirected to the callback URL as a result.
      * <li>Detect the redirection to the callback URL and retrieve
-     *     the value of the oauth_verifier parameter from the URL.
-     *     If and only if dummyCallbackUrl is false, the callback
-     *     URL is actually accessed.
-     * <li>Get an access token using the oauth_verifier.
+     *     the value of the {@code oauth_verifier} parameter from the URL.
+     *     If and only if {@code dummyCallbackUrl} is {@code false},
+     *     the callback URL is actually accessed.
+     * <li>Get an access token using the {@code oauth_verifier}.
      * <li>Call {@link Listener#onSuccess(TwitterOAuthView, AccessToken)
      *     onSuccess()} method of the {@link Listener listener} on the
      *     UI thread.
@@ -335,6 +355,12 @@ public class TwitterOAuthView extends WebView
      * onFailure()} of the {@link Listener listener} is called.
      * </p>
      *
+     * <p>
+     * This method cancels a running {@code AsyncTask} that may have
+     * been invoked by the previous call of this method before invoking
+     * a new {@code AsyncTask}. 
+     * </p>
+     *
      * @param consumerKey
      * @param consumerSecret
      * @param callbackUrl
@@ -342,20 +368,128 @@ public class TwitterOAuthView extends WebView
      * @param listener
      *
      * @throws IllegalArgumentException
-     *         At least one of 'consumerKey', 'consumerSecret' or
-     *         'callbackUrl' is null.
+     *         At least one of {@code consumerKey}, {@code consumerSecret},
+     *         {@code callbackUrl} or {@code listener} is null.
      */
-    public void start(String consumerKey, String consumerSecret, String callbackUrl, boolean dummyCallbackUrl,
+    public void start(String consumerKey, String consumerSecret,
+            String callbackUrl, boolean dummyCallbackUrl,
             Listener listener)
     {
+        // Check the given arguments.
         if (consumerKey == null || consumerSecret == null || callbackUrl == null || listener == null)
         {
             throw new IllegalArgumentException();
         }
 
+        // Convert the boolean parameter to a Boolean object to pass it
+        // as an argument of AsyncTask.execute().
         Boolean dummy = Boolean.valueOf(dummyCallbackUrl);
 
-        new TwitterOAuthTask().execute(consumerKey, consumerSecret, callbackUrl, dummy, listener);
+        TwitterOAuthTask oldTask;
+        TwitterOAuthTask newTask;
+
+        synchronized (this)
+        {
+            // Renew Twitter OAuth task.
+            oldTask = twitterOAuthTask;
+            newTask = new TwitterOAuthTask();
+            twitterOAuthTask = newTask;
+        }
+
+        // Cancel an old running task, if not null.
+        cancelTask(oldTask);
+
+        // Execute the new task.
+        newTask.execute(consumerKey, consumerSecret, callbackUrl, dummy, listener);
+    }
+
+
+    /**
+     * Cancel the Twitter OAuth process.
+     *
+     * <p>
+     * The main purpose of this method is to cancel an AsyncTask
+     * that may be running. The current implementation of this
+     * method does not call {@link #stopLoading()}, so call it
+     * yourself if necessary.
+     * </p>
+     */
+    public void cancel()
+    {
+        TwitterOAuthTask task;
+
+        synchronized (this)
+        {
+            // Get the reference of the running task.
+            task = twitterOAuthTask;
+            twitterOAuthTask = null;
+        }
+
+        // Cancel a task, if not null.
+        cancelTask(task);
+    }
+
+
+    private void cancelTask(TwitterOAuthTask task)
+    {
+        // If the given argument is null.
+        if (task == null)
+        {
+            // No task to cancel. Nothing to do.
+            return;
+        }
+
+        // If the task has not been cancelled yet.
+        if (task.isCancelled() == false)
+        {
+            if (isDebugEnabled())
+            {
+                Log.d(TAG, "Cancelling a task.");
+            }
+
+            // Cancel the task.
+            task.cancel(true);
+        }
+
+        synchronized (task)
+        {
+            if (isDebugEnabled())
+            {
+                Log.d(TAG, "Notifying a task of cancellation.");
+            }
+
+            // Notify to interrupt the loop of waitForAuthorization().
+            task.notify();
+        }
+    }
+
+
+    /**
+     * Check if debug logging is enabled.
+     *
+     * <p>
+     * The initial state of this debug flag is the value of {@code DEBUG}
+     * which is a static variable.
+     * </p>
+     *
+     * @return
+     *         {@code true} is enabled.
+     */
+    public boolean isDebugEnabled()
+    {
+        return isDebugEnabled;
+    }
+
+
+    /**
+     * Enable or disable debug logging.
+     *
+     * @param enabled
+     *         {@code true} to enable debug logging.
+     */
+    public void setDebugEnabled(boolean enabled)
+    {
+        isDebugEnabled = enabled;
     }
 
 
@@ -371,6 +505,28 @@ public class TwitterOAuthView extends WebView
         private AccessToken accessToken;
 
 
+        /**
+         * Check whether this task has been cancelled or not.
+         *
+         * @return
+         *         {@code true} if this task has been cancelled.
+         */
+        private boolean checkCancellation(String context)
+        {
+            if (isCancelled() == false)
+            {
+                return false;
+            }
+
+            if (isDebugEnabled())
+            {
+                Log.d(TAG, "Cancellation was detected in the context of " + context);
+            }
+
+            return true;
+        }
+
+
         @Override
         protected void onPreExecute()
         {
@@ -382,26 +538,23 @@ public class TwitterOAuthView extends WebView
         @Override
         protected Result doInBackground(Object... args)
         {
-            String consumerKey = (String)args[0];
-            String consumerSecret = (String)args[1];
-
-            // Callback URL.
-            callbackUrl = (String)args[2];
-            dummyCallbackUrl = (Boolean)args[3];
-
-            // Listener
-            listener = (Listener)args[4];
-
-            if (DEBUG)
+            // Check if this task has been cancelled.
+            if (checkCancellation("doInBackground() [on entry]"))
             {
-                Log.d(TAG, "CONSUMER KEY = " + consumerKey);
-                Log.d(TAG, "CONSUMER SECRET = " + consumerSecret);
-                Log.d(TAG, "CALLBACK URL = " + callbackUrl);
-                Log.d(TAG, "DUMMY CALLBACK URL = " + dummyCallbackUrl);
+                return Result.CANCELLATION;
             }
 
-            if (DEBUG)
-                System.setProperty("twitter4j.debug", "true");
+            // Name the arguments.
+            String consumerKey    = (String)  args[0];
+            String consumerSecret = (String)  args[1];
+            callbackUrl           = (String)  args[2];
+            dummyCallbackUrl      = (Boolean) args[3];
+            listener              = (Listener)args[4];
+
+            if (isDebugEnabled())
+            {
+                debugDoInBackground(args);
+            }
 
             // Create a Twitter instance with the given pair of
             // consumer key and consumer secret.
@@ -423,13 +576,24 @@ public class TwitterOAuthView extends WebView
             authorize();
 
             // Wait until the authorization step is done.
-            waitForAuthorization();
+            boolean cancelled = waitForAuthorization();
+            if (cancelled)
+            {
+                // Cancellation was detected while waiting.
+                return Result.CANCELLATION;
+            }
 
             // If the authorization has succeeded, 'verifier' is not null.
             if (verifier == null)
             {
                 // The authorization failed.
                 return Result.AUTHORIZATION_ERROR;
+            }
+
+            // Check if this task has been cancelled.
+            if (checkCancellation("doInBackground() [before getAccessToken()]"))
+            {
+                return Result.CANCELLATION;
             }
 
             // The authorization succeeded. The last step is to get
@@ -446,17 +610,37 @@ public class TwitterOAuthView extends WebView
         }
 
 
+        private void debugDoInBackground(Object... args)
+        {
+            Log.d(TAG, "CONSUMER KEY = " + (String)args[0]);
+            Log.d(TAG, "CONSUMER SECRET = " + (String)args[1]);
+            Log.d(TAG, "CALLBACK URL = " + (String)args[2]);
+            Log.d(TAG, "DUMMY CALLBACK URL = " + (Boolean)args[3]);
+
+            System.setProperty("twitter4j.debug", "true");
+        }
+
+
         @Override
         protected void onProgressUpdate(Void... values)
         {
+            // Check if this task has been cancelled.
+            if (checkCancellation("onProgressUpdate()"))
+            {
+                // Not load the authorization URL.
+                return;
+            }
+
             // In this implementation, onProgressUpdate() is called
             // only from authorize().
 
             // The authorization URL.
             String url = requestToken.getAuthorizationURL();
 
-            if (DEBUG)
+            if (isDebugEnabled())
+            {
                 Log.d(TAG, "Loading the authorization URL: " + url);
+            }
 
             // Load the authorization URL on the UI thread.
             TwitterOAuthView.this.loadUrl(url);
@@ -466,8 +650,10 @@ public class TwitterOAuthView extends WebView
         @Override
         protected void onPostExecute(Result result)
         {
-            if (DEBUG)
+            if (isDebugEnabled())
+            {
                 Log.d(TAG, "onPostExecute: result = " + result);
+            }
 
             if (result == null)
             {
@@ -485,6 +671,14 @@ public class TwitterOAuthView extends WebView
                 // Call onFailure() method of the listener.
                 listener.onFailure(TwitterOAuthView.this, result);
             }
+
+            synchronized (TwitterOAuthView.this)
+            {
+                if (TwitterOAuthView.this.twitterOAuthTask == this)
+                {
+                    TwitterOAuthView.this.twitterOAuthTask = null;
+                }
+            }
         }
 
 
@@ -495,8 +689,10 @@ public class TwitterOAuthView extends WebView
                 // Get a request token. This triggers network access.
                 RequestToken token = twitter.getOAuthRequestToken();
 
-                if (DEBUG)
+                if (isDebugEnabled())
+                {
                     Log.d(TAG, "Got a request token.");
+                }
 
                 return token;
             }
@@ -520,27 +716,47 @@ public class TwitterOAuthView extends WebView
         }
 
 
-        private void waitForAuthorization()
+        private boolean waitForAuthorization()
         {
             while (authorizationDone == false)
             {
+                // Check if this task has been cancelled.
+                if (checkCancellation("waitForAuthorization()"))
+                {
+                    // Cancelled.
+                    return true;
+                }
+
                 synchronized (this)
                 {
                     try
                     {
-                        if (DEBUG)
+                        if (isDebugEnabled())
+                        {
                             Log.d(TAG, "Waiting for the authorization step to be done.");
+                        }
 
+                        // Wait until interrupted.
                         this.wait();
                     }
                     catch (InterruptedException e)
                     {
+                        // Interrupted.
+                        if (isDebugEnabled())
+                        {
+                            Log.d(TAG, "Interrupted while waiting for the authorization step to be done.");
+                        }
                     }
                 }
             }
 
-            if (DEBUG)
+            if (isDebugEnabled())
+            {
                 Log.d(TAG, "Finished waiting for the authorization step to be done.");
+            }
+
+            // Not cancelled.
+            return false;
         }
 
 
@@ -551,9 +767,12 @@ public class TwitterOAuthView extends WebView
 
             synchronized (this)
             {
-                if (DEBUG)
+                if (isDebugEnabled())
+                {
                     Log.d(TAG, "Notifying that the authorization step was done.");
+                }
 
+                // Notify to interrupt the loop in waitForAuthorization().
                 this.notify();
             }
         }
@@ -620,8 +839,10 @@ public class TwitterOAuthView extends WebView
                 }
 
                 // This web view is about to be redirected to the callback URL.
-                if (DEBUG)
+                if (isDebugEnabled())
+                {
                     Log.d(TAG, "Detected the callback URL: " + url);
+                }
 
                 // Convert String to Uri.
                 Uri uri = Uri.parse(url);
@@ -630,9 +851,11 @@ public class TwitterOAuthView extends WebView
                 // A successful response should contain the parameter.
                 verifier = uri.getQueryParameter("oauth_verifier");
 
-                if (DEBUG)
+                if (isDebugEnabled())
+                {
                     Log.d(TAG, "oauth_verifier = " + verifier);
-                
+                }
+
                 // Notify that the the authorization step was done.
                 notifyAuthorization();
 
@@ -652,8 +875,10 @@ public class TwitterOAuthView extends WebView
                 // Get an access token. This triggers network access.
                 AccessToken token = twitter.getOAuthAccessToken(requestToken, verifier);
 
-                if (DEBUG)
+                if (isDebugEnabled())
+                {
                     Log.d(TAG, "Got an access token for " + token.getScreenName());
+                }
 
                 return token;
             }
