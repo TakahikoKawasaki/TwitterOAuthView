@@ -248,9 +248,15 @@ public class TwitterOAuthView extends WebView
 
 
     /**
+     * Flag to call cancel() from within onDetachedFromWindow().
+     */
+    private boolean cancelOnDetachedFromWindow = true;
+
+
+    /**
      * Flag for debug logging.
      */
-    private boolean isDebugEnabled;
+    private boolean isDebugEnabled = DEBUG;
 
 
     /**
@@ -318,9 +324,6 @@ public class TwitterOAuthView extends WebView
 
         // Scroll bar
         setScrollBarStyle(WebView.SCROLLBARS_INSIDE_OVERLAY);
-
-        // Set the initial value of the flag of debug logging.
-        isDebugEnabled = DEBUG;
     }
 
 
@@ -490,6 +493,56 @@ public class TwitterOAuthView extends WebView
     public void setDebugEnabled(boolean enabled)
     {
         isDebugEnabled = enabled;
+    }
+
+
+    /**
+     * Check if cancellation is executed on {@code onDetachedFromWindow()}.
+     * The default value is {@code true}.
+     *
+     * @return
+     *         {@code true} if {@link #cancel()} is called from within
+     *         {@code onDetachedFromWindow()}.
+     */
+    public boolean isCancelOnDetachedFromWindow()
+    {
+        return cancelOnDetachedFromWindow;
+    }
+
+
+    /**
+     * Change the configuration to call {@link #cancel()} on
+     * {@code onDetachedFromWindow()}.
+     *
+     * @param enabled
+     *         {@code true} to let this instance call {@link #cancel()}
+     *         automatically from within {@code onDetachedFromWindow}.
+     *         {@code false} to disable the automatic call.
+     */
+    public void setCancelOnDetachedFromWindow(boolean enabled)
+    {
+        cancelOnDetachedFromWindow = enabled;
+    }
+
+
+    /**
+     * Called when this view is detached from the window.
+     *
+     * <p>
+     * The implementation of this method of {@code TwitterOAuthView}
+     * calls {@code super.onDetachedFromWindow()}, and then {@link #cancel()}
+     * if {@link #isCancelOnDetachedFromWindow()} returns {@code true}.
+     * </p>
+     */
+    @Override
+    protected void onDetachedFromWindow()
+    {
+        super.onDetachedFromWindow();
+
+        if (isCancelOnDetachedFromWindow())
+        {
+            cancel();
+        }
     }
 
 
