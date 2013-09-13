@@ -717,14 +717,58 @@ public class TwitterOAuthView extends WebView
             if (result == Result.SUCCESS)
             {
                 // Call onSuccess() method of the listener.
-                listener.onSuccess(TwitterOAuthView.this, accessToken);
+                fireOnSuccess();
             }
             else
             {
                 // Call onFailure() method of the listener.
-                listener.onFailure(TwitterOAuthView.this, result);
+                fireOnFailure(result);
             }
 
+            // Set null to TwitterOAuthView.this.twitterOAuthTask if appropriate.
+            clearTaskReference();
+        }
+
+
+        @Override
+        protected void onCancelled()
+        {
+            super.onCancelled();
+
+            // Call onFailure() method of the listener.
+            fireOnFailure(Result.CANCELLATION);
+
+            // Set null to TwitterOAuthView.this.twitterOAuthTask if appropriate.
+            clearTaskReference();
+        }
+
+
+        private void fireOnSuccess()
+        {
+            if (isDebugEnabled())
+            {
+                Log.d(TAG, "Calling Listener.onSuccess");
+            }
+
+            // Call onSuccess() method of the listener.
+            listener.onSuccess(TwitterOAuthView.this, accessToken);
+        }
+
+
+        private void fireOnFailure(Result result)
+        {
+            if (isDebugEnabled())
+            {
+                Log.d(TAG, "Calling Listener.onFailure, result = " + result);
+            }
+
+            // Call onFailure() method of the listener.
+            listener.onFailure(TwitterOAuthView.this, result);
+        }
+
+
+        private void clearTaskReference()
+        {
             synchronized (TwitterOAuthView.this)
             {
                 if (TwitterOAuthView.this.twitterOAuthTask == this)
